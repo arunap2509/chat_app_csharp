@@ -15,9 +15,20 @@ public class AppDbContext : DbContext
         optionsBuilder.UseNpgsql().UseSnakeCaseNamingConvention();
     }
 
+    // protected override void OnModelCreating(ModelBuilder modelBuilder)
+    // {
+    //     base.OnModelCreating(modelBuilder);
+    //     modelBuilder.Entity<User>()
+    //     .Property(u => u.CreatedAt)
+    //     .HasDefaultValueSql("now()");
+
+
+    // }
+
     public DbSet<User> Users { get; set; }
     public DbSet<UserActiveChat> UserActiveChats { get; set; }
     public DbSet<Group> Groups { get; set; }
     public DbSet<GroupInfo> GroupInfos { get; set; }
     public DbSet<Chat> Chats { get; set; }
+    public DbSet<Friend> Friends { get; set; }
 }
