@@ -1,11 +1,7 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 using ChatApp.Data;
 using ChatApp.Dto;
 using ChatApp.Models;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 
 namespace ChatApp.Services;
 
@@ -13,8 +9,8 @@ public interface IAuthService
 {
     Task<AuthResponse> Register(RegisterRequest request);
     Task<AuthResponse> Login(LoginRequest request);
-    Task ForgotPassword(string userId, string newPassword);
-    Task Logout(string userId);
+    Task ForgotPassword(string email, string newPassword);
+    Task Logout(string userName);
     Task<TokenResponse> GetToken(string refreshToken);
 }
 
@@ -22,16 +18,30 @@ public class AuthService : IAuthService
 {
     private readonly AppDbContext _dbContext;
     private readonly IConfiguration _configuration;
+    private readonly ITokenService _tokenService;
 
-    public AuthService(AppDbContext dbContext, IConfiguration configuration)
+    public AuthService(AppDbContext dbContext, IConfiguration configuration, ITokenService tokenService)
     {
         _dbContext = dbContext;
         _configuration = configuration;
+        _tokenService = tokenService;
     }
 
-    public Task ForgotPassword(string userId, string newPassword)
+    public async Task ForgotPassword(string email, string newPassword)
     {
-        throw new NotImplementedException();
+        var user = await _dbContext.Users.FirstOrDefaultAsync(x => x.Email == email);
+
+        if (user is null)
+        {
+            // throw
+        }
+
+        var hashedPassword = GenerateHash(newPassword);
+        user.Password = hashedPassword;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        _dbContext.Users.Update(user);
+        await _dbContext.SaveChangesAsync();
     }
 
     public async Task<AuthResponse> Login(LoginRequest request)
@@ -43,24 +53,34 @@ public class AuthService : IAuthService
             // throw an error
         }
 
+        user.RefreshToken = _tokenService.GenerateRefreshToken();
+        user.RefreshTokenExpireTime = DateTime.UtcNow.AddDays(1);
+        user.UpdatedAt = DateTime.UtcNow;
+
+        _dbContext.Users.Update(user);
+        await _dbContext.SaveChangesAsync();
+
         return new AuthResponse
         {
             UserId = user.Id,
-            AccessToken = GenerateToken(user),
-            RefreshToken = GenerateRefreshToken()
+            AccessToken = _tokenService.GenerateAccessToken(user),
+            RefreshToken = user.RefreshToken
         };
     }
 
-    public async Task Logout(string userId)
+    public async Task Logout(string userName)
     {
-        var user = await _dbContext.Users.SingleOrDefaultAsync(x => x.Id == userId);
+        var user = await _dbContext.Users.SingleOrDefaultAsync(x => x.UserName == userName);
 
-        if (user == null)
+        if (user == null || user.RefreshToken == null)
         {
             // throw an error
         }
 
         user.RefreshToken = null;
+        user.RefreshTokenExpireTime = DateTime.UtcNow.AddDays(-1);
+        user.UpdatedAt = DateTime.UtcNow;
+
         _dbContext.Update(user);
         await _dbContext.SaveChangesAsync();
     }
@@ -93,29 +113,39 @@ public class AuthService : IAuthService
             UserName = request.UserName,
             Email = request.Email,
             Password = hashedPassword,
-            CreatedAt = DateTime.Now,
-            UpdatedAt = DateTime.Now
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         };
+
+        user.RefreshToken = _tokenService.GenerateRefreshToken();
+        user.RefreshTokenExpireTime = DateTime.UtcNow.AddDays(1);
 
         await _dbContext.Users.AddAsync(user);
         await _dbContext.SaveChangesAsync();
 
-        var accessToken = GenerateToken(user);
-        var refreshToken = GenerateRefreshToken();
-
         var response = new AuthResponse()
         {
             UserId = user.Id,
-            AccessToken = accessToken,
-            RefreshToken = refreshToken
+            AccessToken = _tokenService.GenerateAccessToken(user),
+            RefreshToken = user.RefreshToken
         };
 
         return response;
     }
 
-    public Task<TokenResponse> GetToken(string refreshToken)
+    public async Task<TokenResponse> GetToken(string refreshToken)
     {
-        throw new NotImplementedException();
+        var user = await _dbContext.Users.FirstOrDefaultAsync(x => x.RefreshToken == refreshToken);
+
+        if (user is null || user.RefreshToken is null || user.RefreshTokenExpireTime <= DateTime.UtcNow)
+        {
+            // throw unauthorized request
+        }
+
+        return new TokenResponse
+        {
+            AccessToken = _tokenService.GenerateAccessToken(user)
+        };
     }
 
     private string GenerateHash(string password)
@@ -126,36 +156,5 @@ public class AuthService : IAuthService
     private bool VerifyPassword(string password, string hashedPassword)
     {
         return BCrypt.Net.BCrypt.Verify(password, hashedPassword);
-    }
-
-    private string GenerateToken(User user)
-    {
-        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Secret"]));
-        var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha512);
-
-        var claims = new[]
-        {
-            new Claim(ClaimTypes.NameIdentifier, user.UserName),
-            new Claim(ClaimTypes.Email, user.Email)
-        };
-
-        var token = new JwtSecurityToken(
-            claims: claims,
-            expires: DateTime.Now.AddMinutes(30),
-            signingCredentials: credentials);
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
-    }
-
-    private string GenerateRefreshToken()
-    {
-        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:RefreshTokenKey"]));
-        var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha512);
-
-        var token = new JwtSecurityToken(
-            expires: DateTime.Now.AddDays(1),
-            signingCredentials: credentials);
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }
