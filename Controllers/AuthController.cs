@@ -21,32 +21,70 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
-        var response = await _authService.Register(request);
-        return Ok(response);
+        var result = await _authService.Register(request);
+
+        return result.Match<IActionResult>(
+            (error) =>
+            {
+                List<string> errors = new();
+                foreach (var exp in error)
+                {
+                    errors.Add(exp.Message);
+                }
+                return BadRequest(new { Error = errors });
+            },
+            (response) =>
+            {
+                return Ok(response);
+            }
+        );
     }
 
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        var response = await _authService.Login(request);
-        return Ok(response);
+        var result = await _authService.Login(request);
+        return result.Match<IActionResult>((error) =>
+        {
+            return BadRequest(new { Error = error.Message });
+        }, response =>
+        {
+            return Ok(response);
+        });
     }
 
     [HttpPost("logout")]
     public async Task<IActionResult> Logout()
     {
         var userName = HttpContext.User.Claims.First(x => x.Type == ClaimTypes.Name).Value;
-        await _authService.Logout(userName);
-        return Ok();
+        var result = await _authService.Logout(userName);
+        return result.Match<IActionResult>(ok =>
+        {
+            return Ok();
+        }, error =>
+        {
+            if (error is ApiException exception)
+            {
+                return StatusCode((int)exception.Code, new { error = exception.Message });
+            }
+
+            return BadRequest();
+        });
     }
 
     [HttpPost("forgot-password")]
     [AllowAnonymous]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request)
     {
-        await _authService.ForgotPassword(request.Email, request.NewPassword);
-        return Ok();
+        var result = await _authService.ForgotPassword(request.Email, request.NewPassword);
+        return result.Match<IActionResult>(response =>
+        {
+            return Ok();
+        }, error =>
+        {
+            return BadRequest(new { Error = error.Message });
+        });
     }
 
     [HttpPost("token")]
@@ -58,7 +96,13 @@ public class AuthController : ControllerBase
             return BadRequest();
         }
 
-        var response = await _authService.GetToken(refreshToken);
-        return Ok(response);
+        var result = await _authService.GetToken(refreshToken);
+        return result.Match<IActionResult>((exception) =>
+        {
+            return StatusCode((int)exception.Code, new { error = exception.Message });
+        }, response =>
+        {
+            return Ok(response);
+        });
     }
 }

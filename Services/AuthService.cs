@@ -1,17 +1,20 @@
+using System.Net;
 using ChatApp.Data;
 using ChatApp.Dto;
 using ChatApp.Models;
+using LanguageExt;
+using LanguageExt.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace ChatApp.Services;
 
 public interface IAuthService
 {
-    Task<AuthResponse> Register(RegisterRequest request);
-    Task<AuthResponse> Login(LoginRequest request);
-    Task ForgotPassword(string email, string newPassword);
-    Task Logout(string userName);
-    Task<TokenResponse> GetToken(string refreshToken);
+    Task<Either<AuthResponse, List<ApiException>>> Register(RegisterRequest request);
+    Task<Either<AuthResponse, ApiException>> Login(LoginRequest request);
+    Task<Result<bool>> ForgotPassword(string email, string newPassword);
+    Task<Result<bool>> Logout(string userName);
+    Task<Either<TokenResponse, ApiException>> GetToken(string refreshToken);
 }
 
 public class AuthService : IAuthService
@@ -27,13 +30,14 @@ public class AuthService : IAuthService
         _tokenService = tokenService;
     }
 
-    public async Task ForgotPassword(string email, string newPassword)
+    public async Task<Result<bool>> ForgotPassword(string email, string newPassword)
     {
         var user = await _dbContext.Users.FirstOrDefaultAsync(x => x.Email == email);
 
         if (user is null)
         {
-            // throw
+            var exception = new ApiException("User Not Found", HttpStatusCode.NotFound);
+            return new Result<bool>(exception);
         }
 
         var hashedPassword = GenerateHash(newPassword);
@@ -42,15 +46,23 @@ public class AuthService : IAuthService
 
         _dbContext.Users.Update(user);
         await _dbContext.SaveChangesAsync();
+        return true;
     }
 
-    public async Task<AuthResponse> Login(LoginRequest request)
+    public async Task<Either<AuthResponse, ApiException>> Login(LoginRequest request)
     {
         var user = await _dbContext.Users.SingleOrDefaultAsync(x => x.UserName == request.UserName);
 
-        if (user == null || VerifyPassword(request.Password, user.Password))
+        if (user == null)
         {
-            // throw an error
+            var exception = new ApiException("User Not Found", HttpStatusCode.NotFound);
+            return exception;
+        }
+
+        if (!VerifyPassword(request.Password, user.Password))
+        {
+            var exception = new ApiException("Please enter valid credentials");
+            return exception;
         }
 
         user.RefreshToken = _tokenService.GenerateRefreshToken();
@@ -68,13 +80,20 @@ public class AuthService : IAuthService
         };
     }
 
-    public async Task Logout(string userName)
+    public async Task<Result<bool>> Logout(string userName)
     {
         var user = await _dbContext.Users.SingleOrDefaultAsync(x => x.UserName == userName);
 
-        if (user == null || user.RefreshToken == null)
+        if (user == null)
         {
-            // throw an error
+            var exception = new ApiException("User Not Found", HttpStatusCode.NotFound);
+            return new Result<bool>(exception);
+        }
+
+        if (user.RefreshToken == null)
+        {
+            var alreadyLoggedOut = new ApiException("User already logged out", HttpStatusCode.BadRequest);
+            return new Result<bool>(alreadyLoggedOut);
         }
 
         user.RefreshToken = null;
@@ -83,27 +102,28 @@ public class AuthService : IAuthService
 
         _dbContext.Update(user);
         await _dbContext.SaveChangesAsync();
+        return true;
     }
 
-    public async Task<AuthResponse> Register(RegisterRequest request)
+    public async Task<Either<AuthResponse, List<ApiException>>> Register(RegisterRequest request)
     {
         var isEmailAlreadyExist = await _dbContext.Users.AnyAsync(x => x.Email == request.Email);
         var isUserNameAlreadyExist = await _dbContext.Users.AnyAsync(x => x.UserName == request.UserName);
-        List<string> errorMessage = new();
+        List<ApiException> errorMessage = new();
 
         if (isEmailAlreadyExist)
         {
-            errorMessage.Add("Email already exists");
+            errorMessage.Add(new ApiException("Email already exists"));
         }
 
         if (isUserNameAlreadyExist)
         {
-            errorMessage.Add("Username already exists");
+            errorMessage.Add(new ApiException("Username already exists"));
         }
 
         if (errorMessage.Any())
         {
-            throw new Exception();
+            return errorMessage;
         }
 
         var hashedPassword = GenerateHash(request.Password);
@@ -133,13 +153,20 @@ public class AuthService : IAuthService
         return response;
     }
 
-    public async Task<TokenResponse> GetToken(string refreshToken)
+    public async Task<Either<TokenResponse, ApiException>> GetToken(string refreshToken)
     {
         var user = await _dbContext.Users.FirstOrDefaultAsync(x => x.RefreshToken == refreshToken);
 
-        if (user is null || user.RefreshToken is null || user.RefreshTokenExpireTime <= DateTime.UtcNow)
+        if (user is null)
         {
-            // throw unauthorized request
+            var exception = new ApiException("Invalid refresh token", HttpStatusCode.Unauthorized);
+            return exception;
+        }
+
+        if (user.RefreshToken is null || user.RefreshTokenExpireTime <= DateTime.UtcNow)
+        {
+            var exception = new ApiException("Refresh token expired or invalid", HttpStatusCode.Unauthorized);
+            return exception;
         }
 
         return new TokenResponse
