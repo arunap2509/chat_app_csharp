@@ -47,7 +47,7 @@ public class AuthController : ControllerBase
         var result = await _authService.Login(request);
         return result.Match<IActionResult>((error) =>
         {
-            return BadRequest(new { Error = error.Message });
+            return BadRequest(new { Error = new string[] { error.Message } });
         }, response =>
         {
             return Ok(response);
@@ -66,7 +66,7 @@ public class AuthController : ControllerBase
         {
             if (error is ApiException exception)
             {
-                return StatusCode((int)exception.Code, new { error = exception.Message });
+                return StatusCode((int)exception.Code, new { error = new string[] { exception.Message } });
             }
 
             return BadRequest();
@@ -83,7 +83,7 @@ public class AuthController : ControllerBase
             return Ok();
         }, error =>
         {
-            return BadRequest(new { Error = error.Message });
+            return BadRequest(new { Error = new string[] { error.Message } });
         });
     }
 
@@ -99,7 +99,7 @@ public class AuthController : ControllerBase
         var result = await _authService.GetToken(refreshToken);
         return result.Match<IActionResult>((exception) =>
         {
-            return StatusCode((int)exception.Code, new { error = exception.Message });
+            return StatusCode((int)exception.Code, new { error = new string[] { exception.Message } });
         }, response =>
         {
             return Ok(response);
