@@ -31,4 +31,5 @@ public class AppDbContext : DbContext
     public DbSet<GroupInfo> GroupInfos { get; set; }
     public DbSet<Chat> Chats { get; set; }
     public DbSet<Friend> Friends { get; set; }
+    public DbSet<OtpStore> OtpStores { get; set; }
 }

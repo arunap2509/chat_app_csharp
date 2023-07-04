@@ -105,4 +105,32 @@ public class AuthController : ControllerBase
             return Ok(response);
         });
     }
+
+    [HttpPost("send-otp")]
+    [AllowAnonymous]
+    public async Task<IActionResult> SendOtp([FromBody] SendOtpRequest request)
+    {
+        var result = await _authService.SendOtp(request);
+        return result.Match<IActionResult>(response =>
+        {
+            return Ok();
+        }, error =>
+        {
+            return BadRequest(new { Error = new string[] { error.Message } });
+        });
+    }
+
+    [HttpPost("verify-otp")]
+    [AllowAnonymous]
+    public async Task<IActionResult> VeifyOtp([FromBody] VerifyOtpRequest request)
+    {
+        var result = await _authService.VerifyOtp(request);
+        return result.Match<IActionResult>(response =>
+        {
+            return Ok();
+        }, error =>
+        {
+            return BadRequest(new { Error = new string[] { error.Message } });
+        });
+    }
 }
