@@ -2,6 +2,7 @@ using System.Net;
 using ChatApp.Data;
 using ChatApp.Dto;
 using ChatApp.Models;
+using FluentValidation;
 using LanguageExt;
 using LanguageExt.Common;
 using Microsoft.EntityFrameworkCore;
@@ -24,12 +25,13 @@ public class AuthService : IAuthService
     private readonly AppDbContext _dbContext;
     private readonly IConfiguration _configuration;
     private readonly ITokenService _tokenService;
-
-    public AuthService(AppDbContext dbContext, IConfiguration configuration, ITokenService tokenService)
+    private readonly IValidator<RegisterRequest> _registerValidator;
+    public AuthService(AppDbContext dbContext, IConfiguration configuration, ITokenService tokenService, IValidator<RegisterRequest> registerValidator)
     {
         _dbContext = dbContext;
         _configuration = configuration;
         _tokenService = tokenService;
+        _registerValidator = registerValidator;
     }
 
     public async Task<Result<bool>> ForgotPassword(string email, string newPassword)
@@ -109,22 +111,16 @@ public class AuthService : IAuthService
 
     public async Task<Either<AuthResponse, List<ApiException>>> Register(RegisterRequest request)
     {
-        var isEmailAlreadyExist = await _dbContext.Users.AnyAsync(x => x.Email == request.Email);
-        var isUserNameAlreadyExist = await _dbContext.Users.AnyAsync(x => x.UserName == request.UserName);
         List<ApiException> errorMessage = new();
+        var validationErrors = await _registerValidator.ValidateAsync(request);
 
-        if (isEmailAlreadyExist)
+        if (!validationErrors.IsValid)
         {
-            errorMessage.Add(new ApiException("Email already exists"));
-        }
+            foreach (var error in validationErrors.Errors)
+            {
+                errorMessage.Add(new ApiException(error.ErrorMessage));
+            }
 
-        if (isUserNameAlreadyExist)
-        {
-            errorMessage.Add(new ApiException("Username already exists"));
-        }
-
-        if (errorMessage.Any())
-        {
             return errorMessage;
         }
 
