@@ -36,7 +36,7 @@ public class MessageService : IMessageService
         await SendMessageAsync(model, receiveResult);
     }
 
-    private SendMessage DeserializeData(byte[] buffer, int bufferCount)
+    private SenderMessage DeserializeData(byte[] buffer, int bufferCount)
     {
         var message = Encoding.UTF8.GetString(buffer, 0, bufferCount);
         JsonSerializerOptions options = new()
@@ -44,17 +44,17 @@ public class MessageService : IMessageService
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
-        var model = JsonSerializer.Deserialize<SendMessage>(message, options);
+        var model = JsonSerializer.Deserialize<SenderMessage>(message, options);
         return model;
     }
 
-    private async Task HandleOneToOneMessage(WebSocketReceiveResult result, ResponseMessage response)
+    private async Task HandleOneToOneMessage(WebSocketReceiveResult result, ReceiverMessage response)
     {
         var respondTo = _connectionManager.GetSocketById(response.ChannelId);
         await SendMessageAsync(result, respondTo, response);
     }
 
-    private async Task HandleGroupMessage(WebSocketReceiveResult result, SendMessage model)
+    private async Task HandleGroupMessage(WebSocketReceiveResult result, SenderMessage model)
     {
         var groupMembers = await _dbContext.Groups.Include(x => x.GroupMemberInfos).Where(x => x.Id == model.ChannelId).SelectMany(x => x.GroupMemberInfos.Select(x => x.UserId).ToList()).ToListAsync();
 
@@ -66,7 +66,7 @@ public class MessageService : IMessageService
                 continue;
             }
 
-            var response = new ResponseMessage
+            var response = new ReceiverMessage
             {
                 Message = model.Message,
                 ChannelId = model.ChannelId
@@ -75,11 +75,11 @@ public class MessageService : IMessageService
         }
     }
 
-    private async Task SendMessageAsync(SendMessage model, WebSocketReceiveResult result)
+    private async Task SendMessageAsync(SenderMessage model, WebSocketReceiveResult result)
     {
         if (model.ChannelType == (short)ChannelType.User)
         {
-            var response = new ResponseMessage
+            var response = new ReceiverMessage
             {
                 Message = model.Message,
                 ChannelId = model.ChannelId
@@ -92,7 +92,7 @@ public class MessageService : IMessageService
         }
     }
 
-    private async Task SendMessageAsync(WebSocketReceiveResult result, WebSocket socket, ResponseMessage response)
+    private async Task SendMessageAsync(WebSocketReceiveResult result, WebSocket socket, ReceiverMessage response)
     {
         var serializedData = JsonSerializer.Serialize(response);
         var bytes = Encoding.UTF8.GetBytes(serializedData);
