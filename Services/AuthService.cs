@@ -131,6 +131,7 @@ public class AuthService : IAuthService
             UserName = request.UserName,
             Email = request.Email,
             Password = hashedPassword,
+            PhoneNumber = request.PhoneNumber,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };

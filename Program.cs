@@ -1,7 +1,9 @@
 using System.Text;
 using ChatApp.Data;
+using ChatApp.Middleware;
 using ChatApp.Services;
 using ChatApp.Validators;
+using ChatApp.Websocket;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +22,9 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IMessageService, MessageService>();
+builder.Services.AddSingleton<WebsocketHandler>();
+builder.Services.AddTransient<ConnectionManager>();
 builder.Services.AddValidatorsFromAssemblyContaining(typeof(RegisterRequestValidator));
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -60,6 +65,9 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseWebSockets();
+app.UseWebsocketHandler();
 
 app.MapControllers().RequireAuthorization();
 

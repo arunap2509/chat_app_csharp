@@ -26,10 +26,10 @@ public class AppDbContext : DbContext
     // }
 
     public DbSet<User> Users { get; set; }
-    public DbSet<UserActiveChat> UserActiveChats { get; set; }
+    public DbSet<Models.Thread> Threads { get; set; }
     public DbSet<Group> Groups { get; set; }
-    public DbSet<GroupInfo> GroupInfos { get; set; }
+    public DbSet<GroupMemberInfo> GroupMemberInfos { get; set; }
     public DbSet<Chat> Chats { get; set; }
-    public DbSet<Friend> Friends { get; set; }
+    // public DbSet<Friend> Friends { get; set; }
     public DbSet<OtpStore> OtpStores { get; set; }
 }

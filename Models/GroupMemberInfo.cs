@@ -1,6 +1,6 @@
 namespace ChatApp.Models;
 
-public class GroupInfo
+public class GroupMemberInfo
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
     public string GroupId { get; set; }

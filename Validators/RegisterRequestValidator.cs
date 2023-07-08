@@ -11,6 +11,7 @@ public class RegisterRequestValidator : AbstractValidator<RegisterRequest>
     {
         RuleFor(x => x.Email).NotEmpty().EmailAddress().WithMessage("Invalid email address");
         RuleFor(x => x.Password).NotEmpty().Must(x => x.Length > 8).WithMessage("{PropertyName} should be minimum of 8 characters");
+        RuleFor(x => x.PhoneNumber).NotEmpty().Must(x => x.Length == 10).WithMessage("{PropertyName} is not valid");
 
         RuleFor(x => x.Email).MustAsync(async (email, cancallationToken) => await ValidateEmailAlreadyExist(email, dbContext)).WithMessage("Email already exists");
 
