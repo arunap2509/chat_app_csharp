@@ -94,7 +94,10 @@ public class MessageService : IMessageService
 
     private async Task SendMessageAsync(WebSocketReceiveResult result, WebSocket socket, ReceiverMessage response)
     {
-        var serializedData = JsonSerializer.Serialize(response);
+        var serializedData = JsonSerializer.Serialize(response, options: new JsonSerializerOptions()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        });
         var bytes = Encoding.UTF8.GetBytes(serializedData);
         var bytesCount = Encoding.UTF8.GetByteCount(serializedData);
         await socket.SendAsync(

@@ -12,6 +12,7 @@ public interface IChatService
     Task<Result<bool>> CreateGroupAsync(CreateGroupRequest request);
     Task<Result<bool>> AddUserToGroupAsync(string groupId, AddUserToGroupRequest request);
     Task<Result<bool>> ChangeThreadState(string userId, ChangeThreadStateRequest request);
+    Task<List<ThreadPreviewResponse>> FetchAllThreads(string userId);
 }
 
 public class ChatService : IChatService
@@ -114,5 +115,46 @@ public class ChatService : IChatService
         await _dbContext.SaveChangesAsync();
 
         return true;
+    }
+
+    public async Task<List<ThreadPreviewResponse>> FetchAllThreads(string userId)
+    {
+        var allThreads = await _dbContext.Threads.Where(x => x.UserId == userId && x.State != Enum.ThreadState.Deleted).ToListAsync();
+
+        var users = allThreads.Where(x => x.Type == ChannelType.User).Select(x => x.ChannelId).ToList();
+        var groups = allThreads.Where(x => x.Type == ChannelType.Group).Select(x => x.ChannelId).ToList();
+
+        var userThreads = await _dbContext.Users.Where(x => users.Contains(x.Id)).ToListAsync();
+        var groupThreads = await _dbContext.Groups.Where(x => groups.Contains(x.Id)).ToListAsync();
+
+        List<ThreadPreviewResponse> response = new();
+
+        foreach (var thread in userThreads)
+        {
+            response.Add(new()
+            {
+                ChannelId = thread.Id,
+                DpUrl = thread.DpUrl,
+                Description = null,
+                Name = thread.UserName,
+                ChannelType = allThreads.Find(x => x.ChannelId == thread.Id).Type,
+                ThreadState = allThreads.Find(x => x.ChannelId == thread.Id).State,
+            });
+        }
+
+        foreach (var thread in groupThreads)
+        {
+            response.Add(new()
+            {
+                ChannelId = thread.Id,
+                DpUrl = thread.DpUrl,
+                Description = thread.Description,
+                Name = thread.Name,
+                ChannelType = allThreads.Find(x => x.ChannelId == thread.Id).Type,
+                ThreadState = allThreads.Find(x => x.ChannelId == thread.Id).State,
+            });
+        }
+
+        return response;
     }
 }
